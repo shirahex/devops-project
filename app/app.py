@@ -15,7 +15,7 @@ APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({
-        "message": "DevOps API is running!",
+        "message": "DevOps API v2 - Auto Depoloyed",
         "version": APP_VERSION,
         "timestamp": datetime.datetime.utcnow().isoformat()
     })

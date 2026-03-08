@@ -1,0 +1,24 @@
+---
+# playbook: 03-workers.yml
+# Joins worker nodes to the Kubernetes cluster
+
+- name: Join Worker Nodes to Cluster
+  hosts: workers
+  become: true
+
+  tasks:
+    - name: Copy join command to worker
+      copy:
+        src: /tmp/join_command.sh
+        dest: /tmp/join_command.sh
+        mode: "0755"
+
+    - name: Join the cluster
+      command: bash /tmp/join_command.sh
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+    - name: Remove join command
+      file:
+        path: /tmp/join_command.sh
+        state: absent

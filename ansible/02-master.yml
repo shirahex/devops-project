@@ -1,0 +1,56 @@
+---
+# playbook: 02-master.yml
+# Initializes the Kubernetes master node and installs Flannel CNI
+
+- name: Initialize Kubernetes Master
+  hosts: master
+  become: true
+
+  tasks:
+    - name: Initialize kubeadm
+      command: >
+        kubeadm init
+        --pod-network-cidr=10.244.0.0/16
+        --apiserver-advertise-address={{ ansible_default_ipv4.address }}
+      args:
+        creates: /etc/kubernetes/admin.conf
+      register: kubeadm_output
+
+    - name: Create .kube directory for ubuntu user
+      file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    - name: Copy kubeconfig for ubuntu user
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: "0644"
+
+    - name: Install Flannel CNI
+      become: false
+      command: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+
+    - name: Get join command
+      command: kubeadm token create --print-join-command
+      register: join_command_raw
+
+    - name: Save join command to file
+      copy:
+        content: "{{ join_command_raw.stdout }}"
+        dest: /tmp/join_command.sh
+        mode: "0755"
+
+    - name: Fetch join command to local
+      fetch:
+        src: /tmp/join_command.sh
+        dest: /tmp/join_command.sh
+        flat: yes

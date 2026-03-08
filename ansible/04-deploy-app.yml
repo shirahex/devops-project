@@ -1,0 +1,72 @@
+---
+# playbook: 04-deploy-app.yml
+# Deploys the Flask API to Kubernetes
+
+- name: Deploy Flask API to Kubernetes
+  hosts: master
+  become: false
+  vars:
+    docker_image: "{{ lookup('env', 'DOCKER_IMAGE') | default('yourdockerhubuser/devops-api:latest') }}"
+    app_version: "{{ lookup('env', 'APP_VERSION') | default('1.0.0') }}"
+    kubeconfig: /home/ubuntu/.kube/config
+
+  tasks:
+    - name: Create app namespace
+      command: kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: devops-app
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Copy Kubernetes manifests
+      copy:
+        src: "{{ item }}"
+        dest: /tmp/
+      loop:
+        - ../k8s/deployment.yaml
+        - ../k8s/hpa.yaml
+
+    - name: Update image in deployment manifest
+      replace:
+        path: /tmp/deployment.yaml
+        regexp: "YOUR_DOCKERHUB_USERNAME/devops-api:latest"
+        replace: "{{ docker_image }}"
+
+    - name: Update version in configmap
+      replace:
+        path: /tmp/deployment.yaml
+        regexp: 'APP_VERSION: "1.0.0"'
+        replace: 'APP_VERSION: "{{ app_version }}"'
+
+    - name: Apply Kubernetes deployment
+      command: kubectl apply -f /tmp/deployment.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply HPA
+      command: kubectl apply -f /tmp/hpa.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for deployment to be ready
+      command: >
+        kubectl rollout status deployment/flask-api
+        -n devops-app --timeout=120s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Get service NodePort
+      command: >
+        kubectl get svc flask-api-service -n devops-app
+        -o jsonpath='{.spec.ports[0].nodePort}'
+      register: node_port
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Show app URL
+      debug:
+        msg: "App available at http://{{ ansible_host }}:{{ node_port.stdout }}"

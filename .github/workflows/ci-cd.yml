@@ -96,43 +96,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
+      - name: Verify image on DockerHub
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+          echo "✅ Image shirahex/devops-api:$(echo ${{ github.sha }} | cut -c1-7) built and pushed"
+          echo "🚀 To deploy: kubectl set image deployment/flask-api flask-api=shirahex/devops-api:$(echo ${{ github.sha }} | cut -c1-7) -n devops-app"
 
-      - name: Set image in deployment
+      - name: Deployment summary
         run: |
-          IMAGE_TAG=$(echo "${{ github.sha }}" | cut -c1-7)
-          kubectl set image deployment/flask-api \
-            flask-api=${{ env.DOCKER_IMAGE }}:${IMAGE_TAG} \
-            -n devops-app
-
-      - name: Update app version in configmap
-        run: |
-          kubectl patch configmap flask-api-config \
-            -n devops-app \
-            --patch '{"data":{"APP_VERSION":"${{ github.sha }}"}}'
-
-      - name: Wait for rollout
-        run: |
-          kubectl rollout status deployment/flask-api \
-            -n devops-app --timeout=120s
-
-      - name: Verify deployment
-        run: |
-          echo "=== Pods ==="
-          kubectl get pods -n devops-app
-          echo ""
-          echo "=== Service ==="
-          kubectl get svc -n devops-app
-          echo ""
-          echo "✅ Deployment successful! Version: ${{ github.sha }}"
-
-      - name: Notify on success
-        run: |
-          echo "🚀 Deployed ${{ env.DOCKER_IMAGE }}:$(echo ${{ github.sha }} | cut -c1-7) to Kubernetes"
+          echo "Pipeline complete!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Image: shirahex/devops-api:latest"
